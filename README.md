@@ -2,7 +2,7 @@
 <h1><b>Class</b></h1>
 <sup><b>Supercharge your classes</b></sup><br>
 <sup><a href="https://create.roblox.com/marketplace/asset/13953067746" target="_blank">Model</a></sup>
-<sup><a href="https://github.com/weeeeee8/Class" target="_blank">Github</a></sup>
+<sup><a href="https://devforum.roblox.com/t/class-supercharge-your-classes/2446100" target="_blank">DevForum</a></sup>
 </div>
 
 <div align="center"> <h4> Preface </h4> </div> <hr>
