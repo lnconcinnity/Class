@@ -37,7 +37,7 @@ Another addition of Class is to strictify properties, for example, if we want pr
 
 <div align="center"> <h4> API and Examples </h4> </div> <hr>
 
-[details="API"]
+## **API**
 - ## `Class(defaultProps: {}?)`
   - Creates a new `Class`
 ***
@@ -51,8 +51,7 @@ Another addition of Class is to strictify properties, for example, if we want pr
   - Unlocks the given; allows the property in detail from being changed <sub>Cannot unlock Constants by default</sub>
 - ## `class:__strictifyProperty(propName: string, predicate: (value: any) -> boolean)`
   - Makes the property's value setting strict by calling `predicate` whenever `self.key = value` is done; when `predicate` returns false, it will raise an error.
-
-[/details]
+## **Examples**
 
 <div align="center"> <h4> What now? </h4> </div> <hr>
 

@@ -87,11 +87,11 @@ end
 
 local function initSelf(defaultProps)
 	local markers, realProps = {
-		PRIVATE_MARKER = {},
-		PROTECTED_MARKER = {},
-		LOCKED_MARKER = {},
-		INTERNAL_MARKER = {},
-		STRICTIFIY_VALUE_MARKER = {},
+		[PRIVATE_MARKER] = {},
+		[PROTECTED_MARKER] = {},
+		[LOCKED_MARKER] = {},
+		[INTERNAL_MARKER] = {},
+		[STRICTIFIY_VALUE_MARKER] = {},
 	}, {}
 	
 	if defaultProps then
@@ -136,7 +136,7 @@ local function Class(defaultProps: {}?)
 	end
 
 	function meta:__newindex(key, value)
-		local accessingPrivate, accessingProtected, accessingLocked, accessingInternal = isAccessingPrivate(key), isAccessingProtected(key), rawget(self, LOCKED_MARKER)[key], isAccessingInternal(key)
+		local accessingPrivate, accessingProtected, accessingLocked, accessingInternal = isAccessingPrivate(key), isAccessingProtected(key), rawget(self, LOCKED_MARKER)[key] ~= nil, isAccessingInternal(key)
 		if accessingLocked then
 			error(string.format(
 				if isAConstant(key) then CANNOT_WRITE_CONSTANT else CANNOT_WRITE_LOCKED,
@@ -157,7 +157,7 @@ local function Class(defaultProps: {}?)
 			end
 			
 			if isAConstant(key) and not rawget(self, INTERNAL_MARKER).__canMakeConstants__ then
-				error("Cannot initialize constant '" .. key .. "', consider using class:__init() for this")
+				error("Cannot initialize constant '" .. key .. "' after initialization")
 			end
 
 			if accessingPrivate then
@@ -179,6 +179,7 @@ local function Class(defaultProps: {}?)
 		pasteSelf(self, realProps)
 		
 		self.__canMakeConstants__ = true
+		self.__canStrictifyProperties__ = true
 		
 		if self.__init then
 			self:__init(...)
@@ -190,8 +191,11 @@ local function Class(defaultProps: {}?)
 				self[LOCKED_MARKER][key] = true
 			end
 		end
+		
 		self.__canMakeConstants__ = false
 		self:__lockProperty("__canMakeConstants__")
+		self.__canStrictifyProperties__ = false
+		self:__lockProperty("__canStrictifyProperties__")
 
 		return self
 	end
@@ -207,8 +211,9 @@ local function Class(defaultProps: {}?)
 		setmetatable(subClass, {__index = class})
 		return subClass
 	end
-
-	function class:__strictifyProperty(propName: string, predicate: (value: any) -> boolean)
+	
+	function class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)
+		assert(self.__canStrictifyProperties__ == true, "Cannot strictify properties after initialization")
 		self[STRICTIFIY_VALUE_MARKER][propName] = predicate
 	end
 
