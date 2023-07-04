@@ -2,7 +2,7 @@
 <h1><b>Class</b></h1>
 <sup><b>Supercharge your classes</b></sup><br>
 <sup><a href="https://create.roblox.com/marketplace/asset/13953067746" target="_blank">Model</a></sup>
-<sup><a href="https://devforum.roblox.com/t/class/2446100/" target="_blank">DevForum</a></sup>
+<sup><a href="https://github.com/weeeeee8/Class" target="_blank">Github</a></sup>
 </div>
 
 <div align="center"> <h4> Preface </h4> </div> <hr>
@@ -33,11 +33,11 @@ The table shown below will showcase you the special properties, their prefixes a
 
 Class also gives you the option to lock the property; preventing the property in detail from being changed. To lock a property, you have to call `class:__lockProperty(propName)` and to unlock it you have to call `class:__unlockProperty(propName)` instead. <sub>Note, Constants are basically locked properties,  but you cannot unlock them; doing so will rase an error.</sub>
 
-Another addition of Class is to strictify properties, for example, if we want property `X` strictly only to be numbers, we have to do some checks and stuff; Class will introduce the `class:__strictifyProperty(propName, predicate)` method, where `predicate` is a function that returns a `boolean` value to validate the set process.
+Another addition of Class is to strictify properties, for example, if we want property `X` strictly only to be numbers, we have to do some checks and stuff; Class will introduce the `class:__strictifyProperty__(propName, predicate)` method, where `predicate` is a function that returns a `boolean` value to validate the set process.
 
 <div align="center"> <h4> API and Examples </h4> </div> <hr>
 
-## **API**
+[details="API"]
 - ## `Class(defaultProps: {}?)`
   - Creates a new `Class`
 ***
@@ -49,10 +49,168 @@ Another addition of Class is to strictify properties, for example, if we want pr
   - Locks the given property; prevents the property in detail from being changed. <sub>Constants are locked properties by default</sub>
 - ## `class:__unlockProperty(propName: string)`
   - Unlocks the given; allows the property in detail from being changed <sub>Cannot unlock Constants by default</sub>
-- ## `class:__strictifyProperty(propName: string, predicate: (value: any) -> boolean)`
+- ## `class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)`
   - Makes the property's value setting strict by calling `predicate` whenever `self.key = value` is done; when `predicate` returns false, it will raise an error.
-## **Examples**
+[/details]
 
+<h2><b>Examples</b></h2>
+
+### **Example Class**
+```lua
+local classObject = Class({
+	CONSTANT_MESSAGE = "Bye",
+	publicMessage = "Hi",
+	_privateMessage = "Secret",
+	__protectedMessage = "Hello?"
+})
+
+function classObject:__init()
+	print(self.CONSTANT_MESSAGE, self.publicMessage, self._privateMessage, self.__protectedMessage)
+	-- Bye, Hi, Secret, Hello?
+end
+
+function classObject:setProtected(msg)
+	self.__protectedMessage = msg
+end
+
+function classObject:changeConstant(msg)
+	self.CONSTANT_MESSAGE = msg -- errors
+end
+
+local class = classObject.new()
+
+print(class.__protectedMessage) -- "Hello?"
+--class.__protectedMessage = "Hi!" -- errors
+class:setProtected("Hi!") -- success
+print(class.__protectedMessage)
+
+class.publicMessage = {}
+--print(class._privateMessage) -- errors
+
+print(class.CONSTANT_MESSAGE)
+class:changeConstant("Hiiii")
+print(class.CONSTANT_MESSAGE)
+```
+
+### **Strict Properties**
+```lua
+local class = Class()
+function class:__init()
+    self.X = 2
+    self:__strictifyProperty__('X', function(value)
+        return type(value) == "number" -- we only expect numbers
+    end)
+    self.X = 10 -- ok
+    self.X = "test" -- uh oh error!
+end
+-- main code
+```
+
+### **Inheritance**
+```lua
+local classObject = Class()
+function classObject:__init()
+	self._message = "I can only be accessed by myself and my successors"
+	print(self._message)
+end
+
+local class = classObject.new()
+
+local successor = Class()
+successor.inherits(classObject)
+function successor:__init()
+	print(class._message)
+end
+
+local notSuccessor = Class()
+function notSuccessor:__init()
+	print(class._message)
+end
+
+successor.new() -- success
+notSuccessor.new() -- fails
+```
+
+### **Benchmarking**
+```lua
+local BENCHMARK_COUNT = 50000
+
+local classObject = Class()
+function classObject:__init()
+	self.strict = 1
+	self:__strictifyProperty__('strict', function(v) return type(v) == "number" end)
+end
+
+function classObject:testPublic()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self.value = 1
+	end
+	print('public', os.clock()-s)
+end
+
+function classObject:testPrivate()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self._value = 1
+	end
+	print('private', os.clock()-s)
+end
+
+function classObject:testProtected()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self.__value = 1
+	end
+	print('protected', os.clock()-s)
+end
+
+function classObject:testInternal()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self.__value__ = 1
+	end
+	print('internal', os.clock()-s)
+end
+
+function classObject:testLock()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self:__unlockProperty('value')
+		self.value = 1
+		self:__lockProperty('value')
+	end
+	print('locking', os.clock()-s)
+end
+
+function classObject:testStrict()
+	local s = os.clock()
+	for i = 1, BENCHMARK_COUNT do
+		self.strict = 1
+	end
+	print('strict', os.clock()-s)
+end
+
+function classObject:testActivity(n)
+	local t = 0
+	while true do
+		self._actiivty = math.sin(tick())
+		t += task.wait()
+		if t >= (n or 5) then break end
+	end
+end
+
+local class = classObject.new()
+class:testPublic()
+class:testPrivate()
+class:testProtected()
+class:testInternal()
+class:testLock()
+class:testStrict()
+class:testActivity()
+```
 <div align="center"> <h4> What now? </h4> </div> <hr>
 
 Everything is now up to you once you are using it! You have complete control over how you'll manage your newly constructed class with Class as it brings new functionalities you want complete supervision on!
+
+And always, have fun!;)
