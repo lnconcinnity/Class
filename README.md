@@ -59,8 +59,12 @@ Another addition of Class is to strictify properties, for example, if we want pr
   - Unlocks the given; allows the property in detail from being changed <sub>Cannot unlock Constants by default</sub>
 - ## `class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)`
   - Makes the property's value setting strict by calling `predicate` whenever `self.key = value` is done; when `predicate` returns false, it will raise an error.
-- ## `class:__wrapSignal__(signal: | {Connect: () -> ()}, handler: (...any) -> ())`
+- ## `class:__wrapSignal(signal: | {Connect: () -> ()}, handler: (...any) -> ())`
   - A workaround when indexing private or internal properties inside roblox signals such as `workspace.ChildAdded` and `RunService.Heartbeat` as both are rather debugged as C functions. <sub>Do **NOT** forget to wrap your signals with this method as there might be cases of script exhaustion or constant errors</sub>
+- ## `class:__wrapCoroutine(co: coroutine, handler: (...any) -> ())`
+  - Similar to `class:__wrapSignal()` but for `coroutine` instead
+- ## `class:__wrapTask(task: task, handler: (...any) -> ())`
+  - Similar to `class:__wrapSignal()` but for `task` instead
 
 <h2><b>Examples</b></h2>
 
