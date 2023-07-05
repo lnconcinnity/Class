@@ -48,10 +48,11 @@ local function isWithinClassScope(class, includeInherited)
 	while true do
 		level += 1
 		local method = debug.info(level, 'f')
-		local _, fnName = pcall(debug.info, method, 'n') -- anonymous and c-functions will return nil and prolly error?
-		if fnName == EMPTY_STRING then
+		if method == nil then
 			break
 		end
+		
+		local _, fnName = pcall(debug.info, method, 'n') -- anonymous and c-functions will return nil and prolly error?
 		
 		if hasFunction(class, method) then
 			calledWithinFunction = true
