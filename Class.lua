@@ -19,8 +19,6 @@ local WRITE_INTERNAL_FAILED = "Cannot write internal property \"%s\""
 local CANNOT_WRITE_CONSTANT = "Attempted to overwrite constant \"%s\""
 local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
-local EMPTY_STRING = ''
-
 local CLONE_IGNORE_PROPERTIES = {'new'}
 
 local function hasFunction(class, method)
