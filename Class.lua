@@ -6,11 +6,10 @@ local STRICTIFIY_VALUE_MARKER = newproxy()
 local INTERNAL_MARKER = newproxy()
 local PUBLIC_MARKER = newproxy()
 local LOCKED_MARKER = newproxy() -- cant change after runtime fr
-local SIGNAL_MARKER = newproxy()
+local C_HANDLERS_MARKER = newproxy()
 
 local EXPLICIT_PRIVATE_PREFIX = "_"
 local EXPLICIT_PROTECTED_PREFIX = "__"
-local LOCKED_PREFIX = "!"
 
 local READ_PRIVATE_NO_ACCESS = "Attempted to read private \"%s\""
 local READ_INTERNAL_FAILED = "Cannot read internal property \"%s\""
@@ -21,6 +20,7 @@ local CANNOT_WRITE_CONSTANT = "Attempted to overwrite constant \"%s\""
 local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
 local CLONE_IGNORE_PROPERTIES = {'new'}
+local AUTOLOCK_PROPERTIES = {'__wrapSignal__', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__'}
 
 local function hasFunction(class, method)
 	for _, fn in pairs(class) do
@@ -50,8 +50,8 @@ local function isWithinClassScope(class, self, includeInherited)
 		local _, method = pcall(debug.info, level, 'f')
 		local _, methodName = pcall(debug.info, level, 'n')
 		if not method then break end
-		
-		if hasFunction(class, method) or class[methodName] == method or rawget(self, SIGNAL_MARKER)[method] ~= nil then
+
+		if hasFunction(class, method) or class[methodName] == method or rawget(self, C_HANDLERS_MARKER)[method] ~= nil then
 			calledWithinFunction = true
 		end
 
@@ -95,7 +95,7 @@ local function initSelf(class, defaultProps)
 		[INTERNAL_MARKER] = {},
 		[STRICTIFIY_VALUE_MARKER] = {},
 		[PUBLIC_MARKER] = {},
-		[SIGNAL_MARKER] = {},
+		[C_HANDLERS_MARKER] = {},
 	}, {}
 
 	local function insert(source)
@@ -189,8 +189,6 @@ local function Class(defaultProps: {}?)
 			else
 				if key == PROTECTED_MARKER or key == PRIVATE_MARKER then
 					error("Cannot override internal properties", 2)
-				elseif key:sub(1, 1) == LOCKED_PREFIX then
-					rawget(self, LOCKED_MARKER)[key] = value
 				end
 				public[key] = value
 			end
@@ -211,14 +209,16 @@ local function Class(defaultProps: {}?)
 		-- now check the constants
 		for key, value in pairs(self) do
 			if isAConstant(key) and type(value) ~= "function" then
-				self[LOCKED_MARKER][LOCKED_PREFIX .. key] = true
+				self[LOCKED_MARKER][key] = true
 			end
 		end
 
 		self.__canMakeConstants__ = false
-		self:__lockProperty("__canMakeConstants__")
 		self.__canStrictifyProperties__ = false
-		self:__lockProperty("__canStrictifyProperties__")
+		
+		for _, key in next, AUTOLOCK_PROPERTIES do
+			self:__lockProperty(key)
+		end
 
 		return self
 	end
@@ -234,24 +234,34 @@ local function Class(defaultProps: {}?)
 		setmetatable(subClass, {__index = class})
 		return subClass
 	end
-	
-	function class:__wrapSignal__(signal, handler)
-		self[SIGNAL_MARKER][handler] = true
-		return signal:Connect(handler)
-	end
 
 	function class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)
 		assert(self.__canStrictifyProperties__ == true, "Cannot strictify properties after initialization")
 		self[STRICTIFIY_VALUE_MARKER][propName] = predicate
 	end
+	
+	function class:__wrapSignal(signal, handler)
+		self[C_HANDLERS_MARKER][handler] = true
+		return signal:Connect(handler)
+	end
+	
+	function class:__wrapCoroutine(coroutine, handler)
+		self[C_HANDLERS_MARKER][handler] = true
+		return coroutine(handler)
+	end
+	
+	function class:__wrapTask(task, handler)
+		self[C_HANDLERS_MARKER][handler] = true
+		return task(handler)
+	end
 
 	function class:__lockProperty(propName: string)
-		self[LOCKED_MARKER][LOCKED_PREFIX .. propName] = true
+		self[LOCKED_MARKER][propName] = true
 	end
 
 	function class:__unlockProperty(propName: string)
 		assert(not isAConstant(propName), "Cannot unlock a constant!")
-		self[LOCKED_MARKER][LOCKED_PREFIX .. propName] = nil
+		self[LOCKED_MARKER][propName] = nil
 	end
 
 	return class
