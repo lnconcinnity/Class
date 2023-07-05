@@ -42,6 +42,15 @@ Another addition of Class is to strictify properties, for example, if we want pr
 ***
 - ## `class.new(...any?): Class`
   - Constructs a `Class` object; any properties within the `defaultProps` option containing any of the given special character prefixes will be assigned accordingly.
+- ## `class.inherits(otherClass: Class)`
+  - Allows the given task to access private and protected properties of `otherClass` when both are instantiated as `Class` objects
+- ## `class.extends()`
+  - A simplified version of:
+
+```lua
+	local subClass = setmetatable({}, superClass)
+	subClass.__index = subClass
+```
 - ## `class:__init(...any?)`
   - Called during `class.new()` is ran, all initialization must be done here; but it's for personal preferences; like above, any properties assigned inside the function, with any of the given special character prefixes, will be assigned accordingly.
 - ## `class:__lockProperty(propName: string)`
@@ -50,6 +59,8 @@ Another addition of Class is to strictify properties, for example, if we want pr
   - Unlocks the given; allows the property in detail from being changed <sub>Cannot unlock Constants by default</sub>
 - ## `class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)`
   - Makes the property's value setting strict by calling `predicate` whenever `self.key = value` is done; when `predicate` returns false, it will raise an error.
+- ## `class:__wrapSignal(signal: | {Connect: () -> ()}, handler: (...any) -> ())`
+  - A workaround when indexing private or internal properties inside roblox signals such as `workspace.ChildAdded` and `RunService.Heartbeat` as both are rather debugged as C functions. <sub>Do **NOT** forget to wrap your signals with this method as there might be cases of script exhaustion or constant errors</sub>
 
 <h2><b>Examples</b></h2>
 

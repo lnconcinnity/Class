@@ -20,10 +20,6 @@ local WRITE_INTERNAL_FAILED = "Cannot write internal property \"%s\""
 local CANNOT_WRITE_CONSTANT = "Attempted to overwrite constant \"%s\""
 local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
-local ATTEMPTS = 5
-local TEST_LEVEL_GOAL = 5
-local SAME_THRESHOLD = 20
-
 local CLONE_IGNORE_PROPERTIES = {'new'}
 
 local function hasFunction(class, method)
@@ -44,13 +40,10 @@ local function canAccessViaInheritance(class, methodOrClass)
 	return false
 end
 
-local function testIfIsOnCClosure()
-end
 
 local function isWithinClassScope(class, self, includeInherited)
 	local level = 3--skip pcall, debug.info and __index or __newindex
 	local within = false
-	local calledWithinAnonymous = false
 	local calledWithinFunction = false
 	while true do
 		level += 1
