@@ -20,7 +20,7 @@ local CANNOT_WRITE_CONSTANT = "Attempted to overwrite constant \"%s\""
 local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
 local CLONE_IGNORE_PROPERTIES = {'new'}
-local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerCHandler__'}
+local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__'}
 
 local function hasFunction(class, method)
 	for _, fn in pairs(class) do
