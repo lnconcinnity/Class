@@ -7,6 +7,7 @@ local INTERNAL_MARKER = newproxy()
 local PUBLIC_MARKER = newproxy()
 local LOCKED_MARKER = newproxy() -- cant change after runtime fr
 local SPECIAL_HANDLER_MARKER = newproxy()
+local PROP_CHANGED_SIGNALS_MARKER = newproxy()
 
 local EXPLICIT_PRIVATE_PREFIX = "_"
 local EXPLICIT_PROTECTED_PREFIX = "__"
@@ -95,6 +96,7 @@ local function initSelf(class, defaultProps)
 		[INTERNAL_MARKER] = {},
 		[STRICTIFIY_VALUE_MARKER] = {},
 		[PUBLIC_MARKER] = {},
+		[PROP_CHANGED_SIGNALS_MARKER] = {},
 		[SPECIAL_HANDLER_MARKER] = setmetatable({}, {__mode = 'k'}),
 	}, {}
 
@@ -197,12 +199,9 @@ local function Class(defaultProps: {}?)
 				public[key] = value
 			end
 
-			local sigContainer = rawget(self, '__propChangedSignals__')
-			if sigContainer then
-				local foundChangedSignal = sigContainer[key] :: BindableEvent | nil
-				if foundChangedSignal then
-					foundChangedSignal:Fire(value, oldValue)
-				end
+			local foundChangedSignal = rawget(self, PROP_CHANGED_SIGNALS_MARKER)[key] :: BindableEvent | nil
+			if foundChangedSignal then
+				foundChangedSignal:Fire(value, oldValue)
 			end
 		end
 	end
@@ -212,7 +211,6 @@ local function Class(defaultProps: {}?)
 		local self = setmetatable(markers, meta)
 		self.__canMakeConstants__ = true
 		self.__canStrictifyProperties__ = true
-		self.__propChangedSignals__ = {}
 
 		pasteSelf(self, realProps)
 		if self.__init then
@@ -252,11 +250,11 @@ local function Class(defaultProps: {}?)
 	end
 
 	function class:OnPropertyChanged(propName: string, handler: (...any) -> ()): RBXScriptConnection
-		local signal = self.__propChangedSignals__[propName]
+		local signal = self[PROP_CHANGED_SIGNALS_MARKER][propName]
 		if not signal then
 			signal = Instance.new("BindableEvent")
 			signal.Name = propName
-			self.__propChangedSignals__[propName] = signal
+			self[PROP_CHANGED_SIGNALS_MARKER][propName] = signal
 		end
 		local conn = self:__wrapSignal(signal.Event, handler)
 		return conn
