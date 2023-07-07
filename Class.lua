@@ -252,11 +252,11 @@ local function Class(defaultProps: {}?)
 	end
 
 	function class:OnPropertyChanged(propName: string, handler: (...any) -> ()): RBXScriptConnection
-		local signal = self.__propSignals__[propName]
+		local signal = self.__propChangedSignals__[propName]
 		if not signal then
 			signal = Instance.new("BindableEvent")
 			signal.Name = propName
-			self.__propSignals__[propName] = signal
+			self.__propChangedSignals__[propName] = signal
 		end
 		local conn = self:__wrapSignal(signal.Event, handler)
 		return conn
