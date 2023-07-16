@@ -8,6 +8,7 @@ local PUBLIC_MARKER = newproxy()
 local LOCKED_MARKER = newproxy() -- cant change after runtime fr
 local SPECIAL_HANDLER_MARKER = newproxy()
 local PROP_CHANGED_SIGNALS_MARKER = newproxy()
+local FUNCTION_OVERLOAD_MARKER = newproxy()
 
 local EXPLICIT_PRIVATE_PREFIX = "_"
 local EXPLICIT_PROTECTED_PREFIX = "__"
@@ -41,6 +42,17 @@ local function canAccessViaInheritance(class, methodOrClass)
 	return false
 end
 
+local function evaluateValueForOverloading(self, value)
+	if typeof(value) ~= "function" then
+		return value
+	end
+	
+	local ok, methodName = pcall(debug.info, value, 'n')
+	if ok then
+		local overloads = rawget(self, FUNCTION_OVERLOAD_MARKER)
+		return overloads[methodName] or value
+	end
+end
 
 local function isWithinClassScope(class, self, includeInherited)
 	local level = 3--skip pcall, debug.info and __index or __newindex
@@ -88,7 +100,7 @@ local function isAccessingPrivate(key)
 	return not isSpecialKey(key) and key:sub(1, 2) ~= EXPLICIT_PROTECTED_PREFIX and key:sub(#key - #EXPLICIT_PROTECTED_PREFIX) ~= EXPLICIT_PROTECTED_PREFIX and key:sub(1, 1) == EXPLICIT_PRIVATE_PREFIX
 end
 
-local function initSelf(class, defaultProps)
+local function initSelf(class, defaultProps, classProps)
 	local markers, realProps = {
 		[PRIVATE_MARKER] = {},
 		[PROTECTED_MARKER] = {},
@@ -112,6 +124,7 @@ local function initSelf(class, defaultProps)
 	end
 
 	insert(class)
+	insert(classProps)
 	if defaultProps then
 		insert(defaultProps)
 	end
@@ -126,8 +139,10 @@ local function pasteSelf(self, props)
 end
 
 local function Class(defaultProps: {}?)
+	local properties = {}
 	local meta = {}
 	local class = {}
+	class[FUNCTION_OVERLOAD_MARKER] = {}
 	class[INHERITS_MARKER] = {}
 	class[INHERITED_MARKER] = {}
 
@@ -144,11 +159,11 @@ local function Class(defaultProps: {}?)
 		local result = protected[key] or public[key]
 		if canAccessPrivate or canAccessInternal then
 			local foundInternal = rawget(self, INTERNAL_MARKER)[key]
-			if foundInternal ~= nil then return foundInternal end
+			if foundInternal ~= nil then return evaluateValueForOverloading(self, foundInternal) end
 			local foundPrivate = rawget(self, PRIVATE_MARKER)[key]
-			if foundPrivate ~= nil then return foundPrivate end
+			if foundPrivate ~= nil then return evaluateValueForOverloading(self, foundPrivate) end
 		end
-		return result
+		return evaluateValueForOverloading(self, result)
 	end
 
 	function meta:__newindex(key, value)
@@ -168,7 +183,7 @@ local function Class(defaultProps: {}?)
 			rawget(self, PRIVATE_MARKER),
 			rawget(self, PROTECTED_MARKER),
 			rawget(self, PUBLIC_MARKER)
-	
+			
 			local oldValue = internal[key] or private[key] or protected[key] or public[key]
 			if oldValue == value then
 				return
@@ -207,12 +222,12 @@ local function Class(defaultProps: {}?)
 	end
 
 	function class.new(...)
-		local markers, realProps = initSelf(class, defaultProps)
+		local markers, realProps = initSelf(class, defaultProps, properties)
 		local self = setmetatable(markers, meta)
 		self.__canMakeConstants__ = true
 		self.__canStrictifyProperties__ = true
-
-		pasteSelf(self, realProps)
+		
+		pasteSelf(self, realProps, properties)
 		if self.__init then
 			self:__init(...)
 		end
@@ -229,7 +244,7 @@ local function Class(defaultProps: {}?)
 
 		self.__canMakeConstants__ = false
 		self.__canStrictifyProperties__ = false
-		
+
 		for _, key in next, AUTOLOCK_PROPERTIES do
 			self:__lockProperty(key)
 		end
@@ -259,7 +274,7 @@ local function Class(defaultProps: {}?)
 		local conn = self:__wrapSignal(signal.Event, handler)
 		return conn
 	end
-	
+
 	function class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)
 		assert(self.__canStrictifyProperties__ == true, "Cannot strictify properties after initialization")
 		self[STRICTIFIY_VALUE_MARKER][propName] = predicate
@@ -269,15 +284,15 @@ local function Class(defaultProps: {}?)
 		self[SPECIAL_HANDLER_MARKER][handler] = true
 		return handler
 	end
-	
+
 	function class:__wrapSignal(signal, handler)
 		return signal:Connect(self:__registerSpecialHandler__(handler))
 	end
-	
+
 	function class:__wrapCoroutine(coroutine, handler)
 		return coroutine(self:__registerSpecialHandler__(handler))
 	end
-	
+
 	function class:__wrapTask(task, handler)
 		return task(self:__registerSpecialHandler__(handler))
 	end
@@ -290,6 +305,60 @@ local function Class(defaultProps: {}?)
 		assert(not isAConstant(propName), "Cannot unlock a constant!")
 		self[LOCKED_MARKER][propName] = nil
 	end
+	
+	setmetatable(class, {
+		__newindex = function(self, key, value)
+			properties[key] = value
+			
+			if type(value) == "function" then
+				-- possible function overloading
+				local overloads = rawget(self, FUNCTION_OVERLOAD_MARKER)
+				local ok, name = pcall(debug.info, value, 'n')
+				if ok then
+					local container = overloads[name]
+					if not container then
+						container = setmetatable({}, {
+							__call = function(tbl, ...)
+								if #tbl == 1 then
+									return tbl[1].f(...)
+								else
+									local args = {...}
+									local n = #args
+									local sorted = {}
+									for i = 1, #tbl do
+										local cost = tbl[i].n
+										if tbl[i].b then
+											cost += 50
+										end
+										table.insert(sorted, {cost, tbl[i]})
+									end
+									table.sort(sorted, function(a, b)
+										return a[1] < b[1]
+									end)
+									local target = nil
+									for _, sorted in ipairs(sorted) do
+										local t = sorted[2]
+										if not t.b and t.n ~= n then continue end
+										local args = {pcall(t.f, ...)}
+										if args[1] then
+											target = {unpack(args, 2, #args)}
+											break
+										end
+									end
+									return if type(target) == "table" then unpack(target) else nil
+								end
+							end,
+						})
+						overloads[name] = container
+					end
+					local argCount, isVariaDic = debug.info(value, 'a')
+					table.insert(container, {
+						n = argCount; b = isVariaDic; f = value
+					})
+				end
+			end
+		end,
+	})
 
 	return class
 end
