@@ -64,7 +64,7 @@ local function isWithinClassScope(class, self, includeInherited)
 		local _, methodName = pcall(debug.info, level, 'n')
 		if not method then break end
 
-		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil then
+		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil or rawget(self, FUNCTION_OVERLOAD_MARKER)[methodName] ~= nil then
 			calledWithinFunction = true
 		end
 
@@ -322,8 +322,7 @@ local function Class(defaultProps: {}?)
 								if #tbl == 1 then
 									return tbl[1].f(...)
 								else
-									local args = {...}
-									local n = #args
+									local n = #{...}
 									local sorted = {}
 									for i = 1, #tbl do
 										local cost = tbl[i].n
@@ -336,14 +335,24 @@ local function Class(defaultProps: {}?)
 										return a[1] < b[1]
 									end)
 									local target = nil
+									local latestError = nil
+									local passed = false
 									for _, sorted in ipairs(sorted) do
 										local t = sorted[2]
 										if not t.b and t.n ~= n then continue end
 										local args = {pcall(t.f, ...)}
 										if args[1] then
-											target = {unpack(args, 2, #args)}
+											passed = true
+											if args[2] ~= nil then
+												target = {unpack(args, 2, #args)}
+											end
 											break
+										else
+											latestError = args[2]
 										end
+									end
+									if not passed then
+										error(latestError or "Function overloading error")
 									end
 									return if type(target) == "table" then unpack(target) else nil
 								end
