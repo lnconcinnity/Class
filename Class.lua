@@ -328,6 +328,8 @@ local function Class(defaultProps: {}?)
 										local cost = tbl[i].n
 										if tbl[i].b then
 											cost += 50
+										elseif tbl[i].n == 1 then
+											cost += 10
 										end
 										table.insert(sorted, {cost, tbl[i]})
 									end
@@ -339,7 +341,6 @@ local function Class(defaultProps: {}?)
 									local passed = false
 									for _, sorted in ipairs(sorted) do
 										local t = sorted[2]
-										if not t.b and t.n ~= n then continue end
 										local args = {pcall(t.f, ...)}
 										if args[1] then
 											passed = true
