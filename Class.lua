@@ -325,17 +325,21 @@ local function Class(defaultProps: {}?)
 									local n = #{...}
 									local sorted = {}
 									for i = 1, #tbl do
-										local cost = tbl[i].n
-										if tbl[i].b then
-											cost += 50
-										elseif tbl[i].n == 1 then
-											cost += 10
+										if n > 1 and tbl[i].n > 1 then
+											local cost = tbl[i].n
+											if tbl[i].b then
+												cost += 50
+											end
+											table.insert(sorted, {cost, tbl[i]})
+										elseif n == 1 and tbl[i].n == 1 then
+											table.insert(sorted, {#sorted+1, tbl[i]})
 										end
-										table.insert(sorted, {cost, tbl[i]})
 									end
-									table.sort(sorted, function(a, b)
-										return a[1] < b[1]
-									end)
+									if #sorted > 1 then
+										table.sort(sorted, function(a, b)
+											return a[1] < b[1]
+										end)
+									end
 									local target = nil
 									local latestError = nil
 									local passed = false
