@@ -21,8 +21,12 @@ local WRITE_INTERNAL_FAILED = "Cannot write internal property \"%s\""
 local CANNOT_WRITE_CONSTANT = "Attempted to overwrite constant \"%s\""
 local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
-local CLONE_IGNORE_PROPERTIES = {'new'}
-local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__'}
+local CLONE_IGNORE_PROPERTIES = {'new', 'extend', 'inherits'}
+local IGNORE_OVERLOADS_OF = {'OnPropertyChanged', '__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__'}
+local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__', 'OnPropertyChanged'}
+
+local NO_READING_METATABLE = { __tostring = function() return '{}' end, __metatable = {} }
+local NO_READING_METATABLE_WITH_WEAK_KEY_MODE = { __tostring = function() return '{}' end, __metatable = {}, __mode = 'k' }
 
 local function hasFunction(class, method)
 	for _, fn in pairs(class) do
@@ -102,22 +106,22 @@ end
 
 local function initSelf(class, defaultProps, classProps)
 	local markers, realProps = {
-		[PRIVATE_MARKER] = {},
-		[PROTECTED_MARKER] = {},
-		[LOCKED_MARKER] = {},
-		[INTERNAL_MARKER] = {},
-		[STRICTIFIY_VALUE_MARKER] = {},
-		[PUBLIC_MARKER] = {},
-		[PROP_CHANGED_SIGNALS_MARKER] = {},
-		[SPECIAL_HANDLER_MARKER] = setmetatable({}, {__mode = 'k'}),
+		[PRIVATE_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[PROTECTED_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[LOCKED_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[INTERNAL_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[STRICTIFIY_VALUE_MARKER] = setmetatable({}, NO_READING_METATABLE_WITH_WEAK_KEY_MODE),
+		[PUBLIC_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[PROP_CHANGED_SIGNALS_MARKER] = setmetatable({}, NO_READING_METATABLE),
+		[SPECIAL_HANDLER_MARKER] = setmetatable({}, NO_READING_METATABLE_WITH_WEAK_KEY_MODE),
 	}, {}
 
 	local function insert(source)
 		for key, value in pairs(source) do
+			if CLONE_IGNORE_PROPERTIES[key] then continue end
 			if isSpecialKey(key) then
 				markers[key] = value
 			else
-				if CLONE_IGNORE_PROPERTIES[key] then continue end
 				realProps[key] = value
 			end
 		end
@@ -142,9 +146,22 @@ local function Class(defaultProps: {}?)
 	local properties = {}
 	local meta = {}
 	local class = {}
-	class[FUNCTION_OVERLOAD_MARKER] = {}
-	class[INHERITS_MARKER] = {}
-	class[INHERITED_MARKER] = {}
+	class[FUNCTION_OVERLOAD_MARKER] = setmetatable({}, NO_READING_METATABLE)
+	class[INHERITS_MARKER] = setmetatable({}, NO_READING_METATABLE)
+	class[INHERITED_MARKER] = setmetatable({}, NO_READING_METATABLE)
+
+	function meta:__iter()
+		local clone = {}
+		for k, v in pairs(rawget(self, PUBLIC_MARKER)) do
+			if typeof(v) == "function" then continue end
+			clone[k] = v
+		end
+		for k, v in pairs(rawget(self, PROTECTED_MARKER)) do
+			if typeof(v) == "function" then continue end
+			clone[k:sub(3,3):upper()..k:sub(4)] = v
+		end
+		return next, clone
+	end
 
 	function meta:__index(key)
 		local canAccessPrivate, canAccessInternal = isWithinClassScope(class, self, true), isWithinClassScope(class, self, false)
@@ -311,10 +328,9 @@ local function Class(defaultProps: {}?)
 			properties[key] = value
 			
 			if type(value) == "function" then
-				-- possible function overloading
 				local overloads = rawget(self, FUNCTION_OVERLOAD_MARKER)
 				local ok, name = pcall(debug.info, value, 'n')
-				if ok then
+				if ok and not table.find(IGNORE_OVERLOADS_OF, key) then
 					local container = overloads[name]
 					if not container then
 						container = setmetatable({}, {
