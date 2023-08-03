@@ -310,8 +310,15 @@ local function Class(defaultProps: {}?)
 		return coroutine(self:__registerSpecialHandler__(handler))
 	end
 
-	function class:__wrapTask(task, handler)
-		return task(self:__registerSpecialHandler__(handler))
+	function class:__wrapTask(task, ...)
+		local args = {...}
+		for i = 1, #args do
+			if type(args[i]) == "function" then
+				self:__registerSpecialHandler__(args[i])
+				break
+			end
+		end
+		return task(unpack(args))
 	end
 
 	function class:__lockProperty(propName: string)
