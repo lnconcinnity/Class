@@ -8,6 +8,7 @@ local PUBLIC_MARKER = newproxy()
 local LOCKED_MARKER = newproxy() -- cant change after runtime fr
 local SPECIAL_HANDLER_MARKER = newproxy()
 local PROP_CHANGED_SIGNALS_MARKER = newproxy()
+local SOURCE_FUNCTIONS_MARKER = newproxy()
 local FUNCTION_OVERLOAD_MARKER = newproxy()
 
 local EXPLICIT_PRIVATE_PREFIX = "_"
@@ -68,7 +69,7 @@ local function isWithinClassScope(class, self, includeInherited)
 		local _, methodName = pcall(debug.info, level, 'n')
 		if not method then break end
 
-		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil or rawget(self, FUNCTION_OVERLOAD_MARKER)[methodName] ~= nil then
+		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil or rawget(self, FUNCTION_OVERLOAD_MARKER)[methodName] ~= nil or rawget(self, SOURCE_FUNCTIONS_MARKER)[methodName] ~= nil then
 			calledWithinFunction = true
 		end
 
@@ -146,6 +147,7 @@ local function Class(defaultProps: {}?)
 	local properties = {}
 	local meta = {}
 	local class = {}
+	class[SOURCE_FUNCTIONS_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[FUNCTION_OVERLOAD_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[INHERITS_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[INHERITED_MARKER] = setmetatable({}, NO_READING_METATABLE)
@@ -297,6 +299,73 @@ local function Class(defaultProps: {}?)
 		self[STRICTIFIY_VALUE_MARKER][propName] = predicate
 	end
 
+	-- the target function that is going to be overloaded is best to be left empty!
+	function class:__overloadTargetFunction__(key: string, expects: {string}, func: (...any) -> (...any))
+		if IGNORE_OVERLOADS_OF[key] then
+			error("Cannot overload function '" .. key .. "'.")
+		end
+		local overloads = self[FUNCTION_OVERLOAD_MARKER]
+		local hasOverload = overloads[key] ~= nil
+		if not hasOverload then
+			overloads[key] = setmetatable({}, {
+				__call = function(tbl, ...)
+					local args = {...}
+					local mustOffset = false
+					if getmetatable(args[1]) == getmetatable(self) then
+						mustOffset = true
+					end
+					local argCount = if mustOffset then #args-1 else #args
+					local sorted = {}
+					for i = 1, #tbl do
+						if tbl[i].argumentCount == argCount or tbl[i].isVariaDic then
+							table.insert(sorted, {tbl[i], if tbl[i].isVariaDic then math.huge + (tbl[i].argumentCount - argCount) else #sorted+1})
+						end
+					end
+
+					local target = nil
+					if #sorted > 0 then
+						table.sort(sorted, function(a, b)
+							return a[2] < b[2]
+						end)
+
+						for i = 1, #sorted do
+							local overloadInfo = sorted[i][1]
+							local ok = true
+							for j = if mustOffset then 2 else 1, #args do
+								local expected = overloadInfo.expectsAs[j]
+								if type(expected) == "table" then
+									for n = 1, #expected do
+										if typeof(args[j]) == expected[n] then
+											ok = false
+										end
+									end
+								elseif type(expected) == "string" then
+									if typeof(args[j]) == expected then
+										ok = false
+									end
+								end
+							end
+							if ok or (argCount > overloadInfo.argumentCount and overloadInfo.isVariaDic) then
+								target = overloadInfo.callback
+								break
+							end
+						end
+					end
+
+					return target(unpack(args, if mustOffset then 2 else 1, #args))
+				end
+			})
+		end
+
+		local argCount, isVariaDic = debug.info(func, 'a')
+		table.insert(overloads[key], {
+			expectsAs = expects,
+			argumentCount = argCount,
+			isVariaDic = isVariaDic,
+			callback = self:__registerSpecialHandler__(func),
+		})
+	end
+
 	function class:__registerSpecialHandler__(handler)
 		self[SPECIAL_HANDLER_MARKER][handler] = true
 		return handler
@@ -333,68 +402,10 @@ local function Class(defaultProps: {}?)
 	setmetatable(class, {
 		__newindex = function(self, key, value)
 			properties[key] = value
-			
 			if type(value) == "function" then
-				local overloads = rawget(self, FUNCTION_OVERLOAD_MARKER)
-				local ok, name = pcall(debug.info, value, 'n')
-				if ok and not table.find(IGNORE_OVERLOADS_OF, key) then
-					local container = overloads[name]
-					if not container then
-						container = setmetatable({}, {
-							__call = function(tbl, ...)
-								if #tbl == 1 then
-									return tbl[1].f(...)
-								else
-									local n = #{...}
-									local sorted = {}
-									for i = 1, #tbl do
-										if n > 1 and tbl[i].n > 1 then
-											local cost = tbl[i].n
-											if tbl[i].b then
-												cost += 50
-											end
-											table.insert(sorted, {cost, tbl[i]})
-										elseif n == 1 and tbl[i].n == 1 then
-											table.insert(sorted, {#sorted+1, tbl[i]})
-										end
-									end
-									if #sorted > 1 then
-										table.sort(sorted, function(a, b)
-											return a[1] < b[1]
-										end)
-									end
-									local target = nil
-									local latestError = nil
-									local passed = false
-									for _, sorted in ipairs(sorted) do
-										local t = sorted[2]
-										local args = {pcall(t.f, ...)}
-										if args[1] then
-											passed = true
-											if args[2] ~= nil then
-												target = {unpack(args, 2, #args)}
-											end
-											break
-										else
-											latestError = args[2]
-										end
-									end
-									if not passed then
-										error(latestError or "Function overloading error")
-									end
-									return if type(target) == "table" then unpack(target) else nil
-								end
-							end,
-						})
-						overloads[name] = container
-					end
-					local argCount, isVariaDic = debug.info(value, 'a')
-					table.insert(container, {
-						n = argCount; b = isVariaDic; f = value
-					})
-				end
+				rawget(self, SOURCE_FUNCTIONS_MARKER)[key] = true
 			end
-		end,
+		end
 	})
 
 	return class
