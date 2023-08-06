@@ -46,17 +46,36 @@ Another addition of Class is to strictify properties, for example, if we want pr
   - Allows the given task to access private and protected properties of `otherClass` when both are instantiated as `Class` objects
 - ## `class.extends()`
   - A simplified version of:
-
-```lua
+  ```lua
 	local subClass = setmetatable({}, superClass)
 	subClass.__index = subClass
-```
+  ```
 - ## `class:__init(...any?)`
   - Called during `class.new()` is ran, all initialization must be done here; but it's for personal preferences; like above, any properties assigned inside the function, with any of the given special character prefixes, will be assigned accordingly.
 - ## `class:__lockProperty(propName: string)`
   - Locks the given property; prevents the property in detail from being changed. <sub>Constants are locked properties by default</sub>
 - ## `class:__unlockProperty(propName: string)`
   - Unlocks the given; allows the property in detail from being changed <sub>Cannot unlock Constants by default</sub>
+- ## `class:__overloadTargetFunction__(target: string, expects: {string | {string}}, func: (...any) -> (...any))`
+  - Allows function overloading to `target`; the `target` function should be an empty function, doing nothing, as the `func` parameter will be used instead after the conditions that the `expects` parameter is satisfied. `expects` must contain strings of the desired datatype, ie: `Vector3`, `string`, `number`, etc. On top of that, `target` is case-sensitive! Below is an example:
+  ```lua
+	function myClass:__init()
+		self:__overloadTargetFunction("someFunction", {"number", "number"}, function(a, b)
+			return a + b
+		end)
+		self:__overloadTargetFunction("someFunction", {"string", "string"}, function(a, b)
+			return a .. b
+		end)
+		
+		print(self:someFunction(5, 3)) -- 8
+		print(self:someFunction("Hello ", "World!")) -- Hello World!
+	end
+
+	function myClass:someFunction()
+	end
+  ```
+- ## `class:__registerSpecialHandler__(handler: (...any) -> (...any)): (() -> ())`
+ - Allows C and anonymous functions to be used, this function is sugar-coated by methods such as `__wrapSignal`, `__wrapCoroutine` and `__wrapTask`.
 - ## `class:__strictifyProperty__(propName: string, predicate: (value: any) -> boolean)`
   - Makes the property's value setting strict by calling `predicate` whenever `self.key = value` is done; when `predicate` returns false, it will raise an error.
 - ## `class:__wrapSignal(signal: | {Connect: () -> ()}, handler: (...any) -> ())`

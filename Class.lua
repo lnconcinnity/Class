@@ -246,7 +246,7 @@ local function Class(defaultProps: {}?)
 		self.__canMakeConstants__ = true
 		self.__canStrictifyProperties__ = true
 		
-		pasteSelf(self, realProps, properties)
+		pasteSelf(self, realProps)
 		if self.__init then
 			self:__init(...)
 		end
@@ -300,7 +300,7 @@ local function Class(defaultProps: {}?)
 	end
 
 	-- the target function that is going to be overloaded is best to be left empty!
-	function class:__overloadTargetFunction__(key: string, expects: {string}, func: (...any) -> (...any))
+	function class:__overloadTargetFunction__(key: string, expects: {string | {string}}, func: (...any) -> (...any))
 		if IGNORE_OVERLOADS_OF[key] then
 			error("Cannot overload function '" .. key .. "'.")
 		end
