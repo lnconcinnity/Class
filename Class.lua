@@ -304,9 +304,8 @@ local function Class(defaultProps: {}?)
 
 	-- the target function that is going to be overloaded is best to be left empty!
 	function class:__overloadTargetFunction__(key: string, expects: {string | {string}}, func: (...any) -> (...any))
-		if IGNORE_OVERLOADS_OF[key] then
-			error("Cannot overload function '" .. key .. "'.")
-		end
+		assert(not IGNORE_OVERLOADS_OF[key], "Cannot overload an internal function!")
+		assert(self.__canOverloadFunctions__, "Cannot overload functions after initialization!")
 		local overloads = self[FUNCTION_OVERLOAD_MARKER]
 		local hasOverload = overloads[key] ~= nil
 		if not hasOverload then
