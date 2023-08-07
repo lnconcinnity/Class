@@ -24,7 +24,7 @@ local CANNOT_WRITE_LOCKED = "Attempt to overwrite locked property \"%s\""
 
 local CLONE_IGNORE_PROPERTIES = {'new', 'extend', 'inherits'}
 local IGNORE_OVERLOADS_OF = {'OnPropertyChanged', '__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__'}
-local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__', 'OnPropertyChanged'}
+local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__', 'OnPropertyChanged', '__canOverloadFunctions__'}
 
 local NO_READING_METATABLE = { __tostring = function() return '{}' end, __metatable = {} }
 local NO_READING_METATABLE_WITH_WEAK_KEY_MODE = { __tostring = function() return '{}' end, __metatable = {}, __mode = 'k' }
@@ -245,11 +245,14 @@ local function Class(defaultProps: {}?)
 		local self = setmetatable(markers, meta)
 		self.__canMakeConstants__ = true
 		self.__canStrictifyProperties__ = true
+		self.__canOverloadFunctions__ = true
 		
 		pasteSelf(self, realProps)
 		if self.__init then
 			self:__init(...)
 		end
+
+		self.__canOverloadFunctions__ = false
 
 		-- now check the constants
 		for key, value in pairs(self) do
@@ -332,15 +335,18 @@ local function Class(defaultProps: {}?)
 							local overloadInfo = sorted[i][1]
 							local ok = true
 							for j = if mustOffset then 2 else 1, #args do
-								local expected = overloadInfo.expectsAs[j]
+								local typ = typeof(args[j])
+								local expected = overloadInfo.expectsAs[if mustOffset then j - 1 else j]
 								if type(expected) == "table" then
+									ok = false
 									for n = 1, #expected do
-										if typeof(args[j]) == expected[n] then
-											ok = false
+										if typ == expected[n] then
+											ok = true
+											break
 										end
 									end
 								elseif type(expected) == "string" then
-									if typeof(args[j]) == expected then
+									if typ ~= expected then
 										ok = false
 									end
 								end
