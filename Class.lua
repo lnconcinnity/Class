@@ -8,7 +8,6 @@ local PUBLIC_MARKER = newproxy()
 local LOCKED_MARKER = newproxy() -- cant change after runtime fr
 local SPECIAL_HANDLER_MARKER = newproxy()
 local PROP_CHANGED_SIGNALS_MARKER = newproxy()
-local SOURCE_FUNCTIONS_MARKER = newproxy()
 local FUNCTION_OVERLOAD_MARKER = newproxy()
 
 local EXPLICIT_PRIVATE_PREFIX = "_"
@@ -26,8 +25,12 @@ local CLONE_IGNORE_PROPERTIES = {'new', 'extend', 'inherits'}
 local IGNORE_OVERLOADS_OF = {'OnPropertyChanged', '__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__'}
 local AUTOLOCK_PROPERTIES = {'__wrapSignal', '__lockProperty', '__unlockProperty', '__strictifyProperty__', '__canStrictifyProperties__', '__canMakeConstants__', '__propChangedSignals__', '__wrapCoroutine', '__wrapTask', '__registerSpecialHandler__', 'OnPropertyChanged', '__canOverloadFunctions__'}
 
-local NO_READING_METATABLE = { __tostring = function() return '{}' end, __metatable = {} }
-local NO_READING_METATABLE_WITH_WEAK_KEY_MODE = { __tostring = function() return '{}' end, __metatable = {}, __mode = 'k' }
+local NO_READING_METATABLE = { __tostring = function()
+	return '{}'
+end, __metatable = {} }
+local NO_READING_METATABLE_WITH_WEAK_KEY_MODE = { __tostring = function()
+	return '{}'
+end, __metatable = {}, __mode = 'k' }
 
 local function hasFunction(class, method)
 	for _, fn in pairs(class) do
@@ -69,7 +72,7 @@ local function isWithinClassScope(class, self, includeInherited)
 		local _, methodName = pcall(debug.info, level, 'n')
 		if not method then break end
 
-		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil or rawget(self, FUNCTION_OVERLOAD_MARKER)[methodName] ~= nil or rawget(self, SOURCE_FUNCTIONS_MARKER)[methodName] ~= nil then
+		if hasFunction(class, method) or class[methodName] == method or rawget(self, SPECIAL_HANDLER_MARKER)[method] ~= nil or rawget(self, FUNCTION_OVERLOAD_MARKER)[methodName] ~= nil then
 			calledWithinFunction = true
 		end
 
@@ -147,7 +150,6 @@ local function Class(defaultProps: {}?)
 	local properties = {}
 	local meta = {}
 	local class = {}
-	class[SOURCE_FUNCTIONS_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[FUNCTION_OVERLOAD_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[INHERITS_MARKER] = setmetatable({}, NO_READING_METATABLE)
 	class[INHERITED_MARKER] = setmetatable({}, NO_READING_METATABLE)
@@ -281,7 +283,12 @@ local function Class(defaultProps: {}?)
 	end
 
 	function class.extend()
-		local subClass = Class()
+		local subClass = Class(defaultProps)
+		for k, v in pairs(class) do
+			if subClass[k] == nil then
+				subClass[k] = v
+			end
+		end
 		setmetatable(subClass, {__index = class})
 		return subClass
 	end
@@ -403,15 +410,6 @@ local function Class(defaultProps: {}?)
 		assert(not isAConstant(propName), "Cannot unlock a constant!")
 		self[LOCKED_MARKER][propName] = nil
 	end
-	
-	setmetatable(class, {
-		__newindex = function(self, key, value)
-			properties[key] = value
-			if type(value) == "function" then
-				rawget(self, SOURCE_FUNCTIONS_MARKER)[key] = true
-			end
-		end
-	})
 
 	return class
 end
